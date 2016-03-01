@@ -59,8 +59,8 @@
 (defn app []
   (let [{:keys [email-addr email-timestamp alias sid-token]} @mail-details]
     [:div.container
-     [:div.row [:div.four.column "Email:"][:div.eight.column {:style "font-weight: bold"} email-addr]]
-     [:div.row [:div.four.column "Time:"][:div.eight.column {:style "font-weight: bold" email-timestamp}]]
+     [:div.row [:div.four.column "Email:"][:div.eight.column {:style {:font-weight "bold"}} email-addr]]
+     [:div.row [:div.four.column "Time:"][:div.eight.column {:style {:font-weight "bold"}} email-timestamp]]
      [:div.row [:div.four.column "Alias:"][:div.eight.column [:strong alias]]]
      [:div.row [:div.four.column "SID:"][:div.eight.column [:strong sid-token]]]]))
 
