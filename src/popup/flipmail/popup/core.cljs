@@ -12,10 +12,6 @@
 
 ; -- a message loop ---------------------------------------------------------------------------------------------------------
 
-(def mail-details (r/atom {}))
-
-(def guerrilla-uri "http://api.guerrillamail.com/ajax.php")
-
 (defn process-message! [message]
   (log "POPUP: got message:" message))
 
@@ -32,6 +28,12 @@
     (post-message! background-port "hello from POPUP!")
     (run-message-loop! background-port)))
 
+; -- mail interaction
+
+(def mail-atom (r/atom {}))
+
+(def guerrilla-uri "http://api.guerrillamail.com/ajax.php")
+
 (defn kebabify [m]
   (transform-keys ->kebab-case-keyword m))
 
@@ -40,7 +42,7 @@
                       :handler #(go (>! receiver (kebabify %)))}))
 
 (defn check-email [receiver]
-  (GET guerrilla-uri {:params {:f "check_email"}
+  (GET guerrilla-uri {:params {:f "get_email_list" :offset 0}
                       :handler #(go (>! receiver (kebabify %)))}))
 
 (defn fetch-email [receiver id]
@@ -53,16 +55,37 @@
     (go-loop []
       (let [details (<! details-chan)]
         (.log js/console details)
-        (reset! mail-details details))
+        (swap! mail-atom assoc :details details))
       (recur))))
 
+(defn show-email []
+  (let [emails-chan (chan)]
+    (js/setInterval #(do
+                      (log "Fetching Emails...")
+                      (check-email emails-chan))
+                    5000)
+    (go-loop []
+      (let [emails (<! emails-chan)]
+        (.log js/console emails)
+        (swap! mail-atom assoc :emails emails)))))
+
+(defn email-component [emails]
+  [:div
+   (map #(let [id (:mail-id %)
+               subject (:mail-subject %)
+               from (:mail-from %)
+               excerpt (:mail-excerpt %)]
+           [:div {:key id} (str from " " subject " | " excerpt)]) (:list emails))])
+
 (defn app []
-  (let [{:keys [email-addr email-timestamp alias sid-token]} @mail-details]
+  (let [mail @mail-atom
+        {:keys [email-addr email-timestamp alias sid-token]} (:details mail)
+        emails (:emails mail)]
     [:div.container
      [:div.row [:div.four.column "Email:"][:div.eight.column {:style {:font-weight "bold"}} email-addr]]
-     [:div.row [:div.four.column "Time:"][:div.eight.column {:style {:font-weight "bold"}} email-timestamp]]
-     [:div.row [:div.four.column "Alias:"][:div.eight.column [:strong alias]]]
-     [:div.row [:div.four.column "SID:"][:div.eight.column [:strong sid-token]]]]))
+     [:div.row [:div.four.column "Emails:"][:div.eight.column [email-component emails]]]]))
+
+
 
 ; -- main entry point -------------------------------------------------------------------------------------------------------
 
@@ -70,4 +93,5 @@
   (log "POPUP: init")
   (connect-to-background-page!)
   (r/render-component [app] (js/document.getElementById "app"))
-  (show-current-email))
+  (show-current-email)
+  (show-email))
