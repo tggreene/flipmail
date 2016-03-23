@@ -17,6 +17,8 @@
             [lein-environ "1.0.1"]
             [lein-cooper "1.1.2"]]
 
+  :dev {:dependencies [[com.draines/postal "1.11.3"]]}
+
   :figwheel
   {:server-port    7000
    :nrepl-port     7777
