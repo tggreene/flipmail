@@ -10,3 +10,5 @@
 /.tmp
 figwheel_server.log
 Clojure REPL
+
+.cljs_rhino_repl
