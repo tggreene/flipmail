@@ -6,4 +6,6 @@
                       :from "test@test.test"
                       :to addr
                       :subject "Test"
-                      :body "<a href="">click me</a>"}))
+                      :body "<a href=''>click me</a>"}))
+
+(test-email "zckppzou@guerrillamailblock.com")
