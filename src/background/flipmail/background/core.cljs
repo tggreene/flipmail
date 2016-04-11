@@ -8,11 +8,12 @@
             [chromex.protocols :refer [post-message! get-sender]]
             [chromex.ext.tabs :as tabs]
             [chromex.ext.runtime :as runtime]
-            [flipmail.background.storage :refer [test-storage!]]))
+            [flipmail.background.storage :refer [test-storage!]]
+            [flipmail.guerrilla :as mail]))
 
 (def clients (atom []))
 
-; -- clients manipulation ---------------------------------------------------------------------------------------------------
+; clients manipulation
 
 (defn add-client! [client]
   (log "BACKGROUND: client connected" (get-sender client))
@@ -23,53 +24,80 @@
   (let [remove-item (fn [coll item] (remove #(identical? item %) coll))]
     (swap! clients remove-item client)))
 
-; -- client event loop ------------------------------------------------------------------------------------------------------
+; mail stuff
+
+(def setup-mail
+  (memoize (fn [email-chan inbox-chan interval]
+             (mail/get-email-address email-chan)
+             (mail/get-full-inbox inbox-chan)
+             (js/setInterval #(do
+                                (log "Fetching emails...")
+                                (mail/get-full-inbox inbox-chan))
+                             interval))))
+
+(defn start-mail [client]
+  (let [mail-atom (atom {:type "mail"
+                         :email nil
+                         :inbox []})
+        post-mail (fn []
+                   (let [mail (clj->js @mail-atom)]
+                     (log "Sending mail...")
+                     (log mail)
+                     (when (and (some? mail) (some? client))
+                       (post-message! client mail))))
+        email-chan (chan)
+        inbox-chan (chan)
+        interval 10000]
+    (log "It's happening!")
+    (add-watch mail-atom :mail-watch post-mail)
+    (go-loop []
+      (let [email (<! email-chan)]
+        (log "email = " email)
+        (swap! mail-atom assoc :email (:email-addr email))))
+    (go-loop []
+      (let [inbox (<! inbox-chan)]
+        (log "inbox = " inbox)
+        (swap! mail-atom assoc :inbox (:list inbox))))
+    (setup-mail email-chan inbox-chan interval)
+    (post-mail)))
+
+; client event loop
 
 (defn run-client-message-loop! [client]
   (go-loop []
-    (when-let [message (<! client)]
-      (log "BACKGROUND: got client message:" message "from" (get-sender client))
+    (when-let [message (js->clj (<! client) :keywordize-keys true)]
+      (when (= (:client-type message) "popup")
+        (start-mail client))
       (recur))
     (remove-client! client)))
 
-; -- event handlers ---------------------------------------------------------------------------------------------------------
+; event handlers
 
 (defn handle-client-connection! [client]
   (add-client! client)
-  (post-message! client "hello from BACKGROUND PAGE!")
   (run-client-message-loop! client))
 
-(defn tell-clients-about-new-tab! []
-  (doseq [client @clients]
-    (post-message! client "a new tab was created")))
-
-; -- main event loop --------------------------------------------------------------------------------------------------------
+; main event loop
 
 (defn process-chrome-event [event-num event]
   (log (gstring/format "BACKGROUND: got chrome event (%05d)" event-num) event)
   (let [[event-id event-args] event]
     (case event-id
       ::runtime/on-connect (apply handle-client-connection! event-args)
-      ::tabs/on-created (tell-clients-about-new-tab!)
       nil)))
 
 (defn run-chrome-event-loop! [chrome-event-channel]
-  (log "BACKGROUND: starting main event loop...")
   (go-loop [event-num 1]
     (when-let [event (<! chrome-event-channel)]
       (process-chrome-event event-num event)
-      (recur (inc event-num)))
-    (log "BACKGROUND: leaving main event loop")))
+      (recur (inc event-num)))))
 
 (defn boot-chrome-event-loop! []
   (let [chrome-event-channel (make-chrome-event-channel (chan))]
-    (tabs/tap-all-events chrome-event-channel)
     (runtime/tap-all-events chrome-event-channel)
     (run-chrome-event-loop! chrome-event-channel)))
 
-; -- main entry point -------------------------------------------------------------------------------------------------------
+; main entry point
 
 (defn init! []
-  (log "BACKGROUND: init")
-  (test-storage!)
   (boot-chrome-event-loop!))

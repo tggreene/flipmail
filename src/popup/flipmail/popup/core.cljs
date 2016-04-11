@@ -8,12 +8,20 @@
             [ajax.core :refer [GET POST json-response-format]]
             [reagent.core :as r]
             [camel-snake-kebab.core :refer [->kebab-case-keyword]]
-            [camel-snake-kebab.extras :refer [transform-keys]]))
+            [camel-snake-kebab.extras :refer [transform-keys]]
+            [flipmail.guerrilla :as mail]))
 
-; -- a message loop ---------------------------------------------------------------------------------------------------------
+; a message loop
+
+(def mail-atom (r/atom {}))
 
 (defn process-message! [message]
-  (log "POPUP: got message:" message))
+  (log "POPUP: got message:")
+  (let [message (js->clj message :keywordize-keys true)]
+    (log message)
+    (when (= (:type message) "mail")
+      (reset! mail-atom message)
+      (log @mail-atom))))
 
 (defn run-message-loop! [message-channel]
   (log "POPUP: starting message loop...")
@@ -25,33 +33,14 @@
 
 (defn connect-to-background-page! []
   (let [background-port (runtime/connect)]
-    (post-message! background-port "hello from POPUP!")
+    (post-message! background-port (clj->js {:client-type "popup"}))
     (run-message-loop! background-port)))
 
-; -- mail interaction
-
-(def mail-atom (r/atom {}))
-
-(def guerrilla-uri "http://api.guerrillamail.com/ajax.php")
-
-(defn kebabify [m]
-  (transform-keys ->kebab-case-keyword m))
-
-(defn get-email-address [receiver]
-  (GET guerrilla-uri {:params {:f "get_email_address"}
-                      :handler #(go (>! receiver (kebabify %)))}))
-
-(defn check-email [receiver]
-  (GET guerrilla-uri {:params {:f "get_email_list" :offset 0}
-                      :handler #(go (>! receiver (kebabify %)))}))
-
-(defn fetch-email [receiver id]
-  (GET guerrilla-uri {:params {:f "check_email" :email_id id}
-                      :handler #(go (>! receiver (kebabify %)))}))
+; mail interaction
 
 (defn show-current-email []
   (let [details-chan (chan)]
-    (get-email-address details-chan)
+    (mail/get-email-address details-chan)
     (go-loop []
       (let [details (<! details-chan)]
         (.log js/console details)
@@ -62,7 +51,7 @@
   (let [emails-chan (chan)]
     (js/setInterval #(do
                       (log "Fetching Emails...")
-                      (check-email emails-chan))
+                      (mail/check-email emails-chan))
                     5000)
     (go-loop []
       (let [emails (<! emails-chan)]
@@ -75,23 +64,17 @@
                subject (:mail-subject %)
                from (:mail-from %)
                excerpt (:mail-excerpt %)]
-           [:div {:key id} (str from " " subject " | " excerpt)]) (:list emails))])
+           [:div {:key id} (str from " " subject " | " excerpt)]) emails)])
 
 (defn app []
-  (let [mail @mail-atom
-        {:keys [email-addr email-timestamp alias sid-token]} (:details mail)
-        emails (:emails mail)]
+  (let [{:keys [email inbox]} @mail-atom]
     [:div.container
-     [:div.row [:div.four.column "Email:"][:div.eight.column {:style {:font-weight "bold"}} email-addr]]
-     [:div.row [:div.four.column "Emails:"][:div.eight.column [email-component emails]]]]))
+     [:div.row [:div.four.column "Email:"][:div.eight.column {:style {:font-weight "bold"}} email]]
+     [:div.row [:div.four.column "Inbox:"][:div.eight.column [email-component inbox]]]]))
 
-
-
-; -- main entry point -------------------------------------------------------------------------------------------------------
+; main entry point
 
 (defn init! []
   (log "POPUP: init")
   (connect-to-background-page!)
-  (r/render-component [app] (js/document.getElementById "app"))
-  (show-current-email)
-  (show-email))
+  (r/render-component [app] (js/document.getElementById "app")))
