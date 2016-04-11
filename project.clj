@@ -9,6 +9,7 @@
                  [cljs-ajax "0.5.3"]
                  [prismatic/dommy "1.1.0"]
                  [reagent "0.6.0-alpha"]
+                 [com.draines/postal "1.11.3"]
                  [camel-snake-kebab "0.3.2"]]
 
   :plugins [[lein-cljsbuild "1.1.1"]
@@ -17,13 +18,10 @@
             [lein-environ "1.0.1"]
             [lein-cooper "1.1.2"]]
 
-  :dev {:dependencies [[com.draines/postal "1.11.3"]]}
-
-  :figwheel
-  {:server-port    7000
-   :nrepl-port     7777
-   :server-logfile "figwheel_server.log"
-   :css-dirs       []}
+  :figwheel {:server-port    7000
+             :nrepl-port     7777
+             :server-logfile "figwheel_server.log"
+             :css-dirs       []}
 
   :source-paths ["src"]
 
@@ -33,12 +31,17 @@
 
   :cljsbuild {:builds {}}                                                                                                     ; prevent https://github.com/emezeske/lein-cljsbuild/issues/413
 
-  :profiles {:unpacked
+  :profiles {:dev
+             {:dependencies [[com.cemerick/piggieback "0.2.1"]
+                             [org.clojure/tools.nrepl "0.2.10"]]
+              :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}
+             :unpacked
              {:cljsbuild {:builds
                           {:background
                            {:source-paths ["src/dev"
                                            "src/figwheel"
-                                           "src/background"]
+                                           "src/background"
+                                           "src/core"]
                             :compiler     {:output-to             "resources/unpacked/compiled/background/flipmail.js"
                                            :output-dir            "resources/unpacked/compiled/background"
                                            :asset-path            "compiled/background"
@@ -51,7 +54,8 @@
                            :popup
                            {:source-paths ["src/dev"
                                            "src/figwheel"
-                                           "src/popup"]
+                                           "src/popup"
+                                           "src/core"]
                             :compiler     {:output-to             "resources/unpacked/compiled/popup/flipmail.js"
                                            :output-dir            "resources/unpacked/compiled/popup"
                                            :asset-path            "compiled/popup"
