@@ -54,8 +54,7 @@
                            :popup
                            {:source-paths ["src/dev"
                                            "src/figwheel"
-                                           "src/popup"
-                                           "src/core"]
+                                           "src/popup"]
                             :compiler     {:output-to             "resources/unpacked/compiled/popup/flipmail.js"
                                            :output-dir            "resources/unpacked/compiled/popup"
                                            :asset-path            "compiled/popup"
